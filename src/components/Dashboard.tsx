@@ -10,14 +10,19 @@ import { WalletManager } from './WalletManager';
 import { PositionCard } from './PositionCard';
 import { TradeList } from './TradeList';
 import { PortfolioSummary } from './PortfolioSummary';
-import { useWallets, usePortfolio } from '@/hooks/usePolymarket';
+import { ToastContainer } from './ToastNotifications';
+import { useWallets, usePortfolio, useTradeMonitor } from '@/hooks/usePolymarket';
 import { WatchedWallet } from '@/lib/types';
 
 export function Dashboard() {
     const { wallets, isLoaded, addWallet, removeWallet } = useWallets();
     const [selectedWallet, setSelectedWallet] = useState<WatchedWallet | null>(null);
 
-    const portfolio = usePortfolio(selectedWallet?.address ?? null);
+    // Pass wallet label for notifications
+    const portfolio = usePortfolio(selectedWallet?.address ?? null, selectedWallet?.label);
+
+    // Monitor all wallets for new trades in the background
+    useTradeMonitor(wallets, isLoaded);
 
     const handleSelectWallet = (wallet: WatchedWallet) => {
         setSelectedWallet(wallet);
@@ -61,10 +66,13 @@ export function Dashboard() {
 
                 <div className="sidebar-footer">
                     <p className="refresh-info">
-                        Auto-refresh: 60s
+                        🔔 Auto-refresh: 30s
                     </p>
                 </div>
             </aside>
+
+            {/* Toast Notifications */}
+            <ToastContainer />
 
             {/* Main Content */}
             <main className="main-content">

@@ -17,7 +17,7 @@ export interface Position {
     marketTitle: string;
 
     // Position
-    outcome: "YES" | "NO";
+    outcome: string; // Can be 'YES', 'NO', 'Eagles', 'Chargers', etc.
     tokenId: string;
     size: number;
     avgEntryPrice: number;
@@ -44,7 +44,7 @@ export interface Trade {
     marketSlug: string;
     marketTitle: string;
     side: "BUY" | "SELL";
-    outcome: "YES" | "NO";
+    outcome: string; // Can be 'YES', 'NO', or team names like 'Eagles'
     size: number;
     price: number;
     usdcAmount: number;

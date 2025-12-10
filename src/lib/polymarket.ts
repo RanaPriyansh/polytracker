@@ -19,8 +19,8 @@ const DATA_API_BASE = 'https://data-api.polymarket.com';
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 const CLOB_API_BASE = 'https://clob.polymarket.com';
 
-const DEFAULT_TIMEOUT = 10000;
-const MAX_RETRIES = 3;
+const DEFAULT_TIMEOUT = 5000; // 5 seconds
+const MAX_RETRIES = 1; // Reduced retries for faster failure
 
 // ═══════════════════════════════════════════════════════════
 // Retry Logic with Exponential Backoff
@@ -28,6 +28,23 @@ const MAX_RETRIES = 3;
 
 interface FetchOptions extends RequestInit {
     timeout?: number;
+}
+
+// Extending the imported PolymarketPosition type to include new fields
+// In a real scenario, this would typically be done by modifying the `types.ts` file
+// or by using declaration merging if the original type is declared globally.
+// For the purpose of this exercise, we'll define a local interface that
+// represents the *expected* structure from the API after the change.
+// This assumes the API now returns 'title' and 'slug' directly in the position object.
+export interface PolymarketPositionWithMarketInfo extends PolymarketPosition {
+    title?: string; // Market title
+    slug?: string;  // Market slug
+}
+
+// Similarly for PolymarketTrade
+export interface PolymarketTradeWithMarketInfo extends PolymarketTrade {
+    title?: string; // Market title
+    slug?: string;  // Market slug
 }
 
 class APIError extends Error {
@@ -139,49 +156,48 @@ export async function resolveProxy(userAddress: string): Promise<string> {
 
 /**
  * Fetch positions for a wallet address
+ * API returns title/slug directly - no need to call getMarketDetails
  */
 export async function fetchPositions(walletAddress: string): Promise<Position[]> {
     const proxyAddress = await resolveProxy(walletAddress);
 
-    const rawPositions = await fetchWithRetry<PolymarketPosition[]>(
+    // The API now returns title, slug, outcome directly in the response
+    const rawPositions = await fetchWithRetry<PolymarketPositionWithMarketInfo[]>(
         `${DATA_API_BASE}/positions?user=${proxyAddress}`
     );
 
-    // Fetch market details for each position
-    const positions: Position[] = await Promise.all(
-        rawPositions.map(async (pos) => {
-            const market = await getMarketDetails(pos.conditionId);
+    const positions: Position[] = rawPositions.map((pos) => {
+        const size = parseFloat(pos.size) || 0;
+        const avgEntryPrice = parseFloat(pos.avgPrice) || 0;
+        const currentPrice = parseFloat(pos.curPrice) || 0;
+        const currentValue = size * currentPrice;
+        const costBasis = size * avgEntryPrice;
+        const unrealizedPnL = currentValue - costBasis;
+        const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;
 
-            const size = parseFloat(pos.size) || 0;
-            const avgEntryPrice = parseFloat(pos.avgPrice) || 0;
-            const currentPrice = parseFloat(pos.curPrice) || 0;
-            const currentValue = size * currentPrice;
-            const costBasis = size * avgEntryPrice;
-            const unrealizedPnL = currentValue - costBasis;
-            const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;
-
-            return {
-                id: `${pos.conditionId}-${pos.outcomeIndex}`,
-                walletAddress,
-                proxyWallet: pos.proxyWallet,
-                conditionId: pos.conditionId,
-                marketSlug: market?.slug || pos.conditionId.slice(0, 16),
-                marketTitle: market?.question || 'Unknown Market',
-                outcome: pos.outcomeIndex === 0 ? 'YES' : 'NO',
-                tokenId: pos.asset,
-                size,
-                avgEntryPrice,
-                currentPrice,
-                currentValue,
-                costBasis,
-                unrealizedPnL,
-                unrealizedPnLPercent,
-                redemptionStatus: pos.redeemable ? 'RESOLVED' : 'ACTIVE',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            };
-        })
-    );
+        return {
+            id: `${pos.conditionId}-${pos.outcomeIndex}`,
+            walletAddress,
+            proxyWallet: pos.proxyWallet,
+            conditionId: pos.conditionId,
+            // Use title/slug from API response directly
+            marketSlug: pos.slug || pos.conditionId.slice(0, 16),
+            marketTitle: pos.title || 'Unknown Market',
+            // Use outcome from API (e.g., "Yes", "Eagles") instead of generic YES/NO
+            outcome: (pos.outcome || (pos.outcomeIndex === 0 ? 'YES' : 'NO')).toUpperCase(),
+            tokenId: pos.asset,
+            size,
+            avgEntryPrice,
+            currentPrice,
+            currentValue,
+            costBasis,
+            unrealizedPnL,
+            unrealizedPnLPercent,
+            redemptionStatus: pos.redeemable ? 'RESOLVED' : 'ACTIVE',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+    });
 
     // Filter out resolved/redeemed positions from active view
     return positions.filter(p => p.redemptionStatus === 'ACTIVE');
@@ -189,35 +205,39 @@ export async function fetchPositions(walletAddress: string): Promise<Position[]>
 
 /**
  * Fetch recent trades for a wallet
+ * API returns title/slug directly - no need to call getMarketDetails
  */
-export async function fetchTrades(walletAddress: string, limit = 20): Promise<Trade[]> {
+export async function fetchTrades(walletAddress: string, limit = 50): Promise<Trade[]> {
     const proxyAddress = await resolveProxy(walletAddress);
 
-    const rawTrades = await fetchWithRetry<PolymarketTrade[]>(
+    // The API returns title, slug directly in the response
+    const rawTrades = await fetchWithRetry<PolymarketTradeWithMarketInfo[]>(
         `${DATA_API_BASE}/trades?user=${proxyAddress}&limit=${limit}`
     );
 
-    const trades: Trade[] = await Promise.all(
-        rawTrades.map(async (trade) => {
-            const market = await getMarketDetails(trade.conditionId);
+    const trades: Trade[] = rawTrades.map((trade) => {
+        // Timestamp is Unix epoch in seconds - convert to ISO string
+        const timestampMs = typeof trade.timestamp === 'number'
+            ? trade.timestamp * 1000
+            : parseInt(trade.timestamp) * 1000;
 
-            return {
-                id: trade.id,
-                walletAddress,
-                conditionId: trade.conditionId,
-                marketSlug: market?.slug || trade.conditionId.slice(0, 16),
-                marketTitle: market?.question || 'Unknown Market',
-                side: trade.side.toUpperCase() as 'BUY' | 'SELL',
-                outcome: trade.outcome.toUpperCase() as 'YES' | 'NO',
-                size: parseFloat(trade.size) || 0,
-                price: parseFloat(trade.price) || 0,
-                usdcAmount: (parseFloat(trade.size) || 0) * (parseFloat(trade.price) || 0),
-                timestamp: trade.timestamp,
-                txHash: trade.transactionHash,
-                blockNumber: trade.blockNumber,
-            };
-        })
-    );
+        return {
+            id: trade.id,
+            walletAddress,
+            conditionId: trade.conditionId,
+            // Use title/slug from API response directly
+            marketSlug: trade.slug || trade.conditionId.slice(0, 16),
+            marketTitle: trade.title || 'Unknown Market',
+            side: trade.side.toUpperCase() as 'BUY' | 'SELL',
+            outcome: trade.outcome.toUpperCase(),
+            size: parseFloat(String(trade.size)) || 0,
+            price: parseFloat(String(trade.price)) || 0,
+            usdcAmount: (parseFloat(String(trade.size)) || 0) * (parseFloat(String(trade.price)) || 0),
+            timestamp: new Date(timestampMs).toISOString(),
+            txHash: trade.transactionHash,
+            blockNumber: trade.blockNumber,
+        };
+    });
 
     return trades;
 }
