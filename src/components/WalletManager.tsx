@@ -16,6 +16,8 @@ interface WalletManagerProps {
     onSelectWallet: (wallet: WatchedWallet) => void;
     onUpdateWallet: (id: string, updates: Partial<WatchedWallet>) => void;
     selectedWalletId: string | null;
+    isAddModalOpen?: boolean;
+    onCloseAddModal?: () => void;
 }
 
 export function WalletManager({
@@ -25,10 +27,19 @@ export function WalletManager({
     onSelectWallet,
     onUpdateWallet,
     selectedWalletId,
+    isAddModalOpen = false,
+    onCloseAddModal,
 }: WalletManagerProps) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [internalModalOpen, setInternalModalOpen] = useState(false);
     const [followingCollapsed, setFollowingCollapsed] = useState(false);
     const [watchlistCollapsed, setWatchlistCollapsed] = useState(false);
+
+    // Use external state if provided, otherwise use internal
+    const isModalOpen = isAddModalOpen || internalModalOpen;
+    const closeModal = () => {
+        setInternalModalOpen(false);
+        onCloseAddModal?.();
+    };
 
     // Split wallets by tier
     const { following, watchlist } = useMemo(() => ({
@@ -168,24 +179,22 @@ export function WalletManager({
                 )}
             </div>
 
-            {/* Floating Add Button */}
-            <button
-                className="btn-add-floating"
-                onClick={() => setIsModalOpen(true)}
-                title="Add Trader"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="icon">
-                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                </svg>
-            </button>
-
             {/* Add Wallet Modal */}
             <AddWalletModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={closeModal}
                 onAdd={handleAddWallet}
             />
         </div>
     );
 }
 
+// Export a hook to control the modal from parent
+export function useAddWalletModal() {
+    const [isOpen, setIsOpen] = useState(false);
+    return {
+        isOpen,
+        open: () => setIsOpen(true),
+        close: () => setIsOpen(false),
+    };
+}

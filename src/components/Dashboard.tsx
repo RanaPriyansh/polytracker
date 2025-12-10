@@ -12,6 +12,7 @@ import { TradeList } from './TradeList';
 import { PortfolioSummary } from './PortfolioSummary';
 import { ToastContainer } from './ToastNotifications';
 import { AggregateFeed } from './AggregateFeed';
+import { ContextPanel } from './ContextPanel';
 import { useWallets, usePortfolio } from '@/hooks/usePolymarket';
 import { WatchedWallet, Tier } from '@/lib/types';
 
@@ -21,6 +22,7 @@ export function Dashboard() {
     const { wallets, isLoaded, addWallet, removeWallet, updateWallet } = useWallets();
     const [selectedWallet, setSelectedWallet] = useState<WatchedWallet | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('feed');
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     // Pass wallet label for notifications
     const portfolio = usePortfolio(
@@ -59,14 +61,25 @@ export function Dashboard() {
     }
 
     return (
-        <div className="dashboard">
-            {/* Sidebar */}
+        <div className="dashboard three-zone">
+            {/* Zone 1: Navigation Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-header">
-                    <h1 className="logo" onClick={handleBackToFeed} style={{ cursor: 'pointer' }}>
-                        <span className="logo-icon">🐋</span>
-                        PolyTracker
-                    </h1>
+                    <div className="header-top">
+                        <h1 className="logo" onClick={handleBackToFeed} style={{ cursor: 'pointer' }}>
+                            <span className="logo-icon">🐋</span>
+                            PolyTracker
+                        </h1>
+                        <button
+                            className="btn-add-header"
+                            onClick={() => setIsAddModalOpen(true)}
+                            title="Add Trader"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="icon">
+                                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                            </svg>
+                        </button>
+                    </div>
                     <p className="tagline">Intelligence Platform</p>
                 </div>
 
@@ -94,6 +107,8 @@ export function Dashboard() {
                     onSelectWallet={handleSelectWallet}
                     onUpdateWallet={updateWallet}
                     selectedWalletId={selectedWallet?.id ?? null}
+                    isAddModalOpen={isAddModalOpen}
+                    onCloseAddModal={() => setIsAddModalOpen(false)}
                 />
 
                 <div className="sidebar-footer">
@@ -180,6 +195,21 @@ export function Dashboard() {
                     </div>
                 )}
             </main>
+
+            {/* Zone 3: Context Panel (Right) */}
+            <ContextPanel
+                sectorActivity={{
+                    Politics: 0,
+                    Crypto: 0,
+                    Sports: 0,
+                    Business: 0,
+                    Entertainment: 0,
+                    Other: 0,
+                }}
+                recentAlerts={[]}
+                wallets={wallets}
+            />
         </div>
     );
 }
+

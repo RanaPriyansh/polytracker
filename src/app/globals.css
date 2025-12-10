@@ -1789,6 +1789,478 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  padding-bottom: 70px;
-  /* Space for floating button */
+  padding-bottom: var(--space-md);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER ADD BUTTON
+   ═══════════════════════════════════════════════════════════ */
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.btn-add-header {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-add-header:hover {
+  background: var(--accent-secondary);
+  transform: scale(1.05);
+}
+
+.btn-add-header .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THREE-ZONE LAYOUT
+   ═══════════════════════════════════════════════════════════ */
+
+.dashboard.three-zone {
+  display: grid;
+  grid-template-columns: 260px 1fr 260px;
+  min-height: 100vh;
+}
+
+@media (max-width: 1200px) {
+  .dashboard.three-zone {
+    grid-template-columns: 240px 1fr;
+  }
+
+  .context-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard.three-zone {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTOR FILTER
+   ═══════════════════════════════════════════════════════════ */
+
+.sector-filter {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sector-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.sector-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.sector-btn:hover {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+.sector-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.sector-icon {
+  font-size: 0.9rem;
+}
+
+.sector-label {
+  font-weight: 500;
+}
+
+.sector-count {
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+}
+
+.sector-btn.active .sector-count {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CONTEXT PANEL (Right Zone)
+   ═══════════════════════════════════════════════════════════ */
+
+.context-panel {
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  padding: var(--space-lg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.context-section {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.context-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  color: var(--text-primary);
+}
+
+.context-icon {
+  font-size: 1rem;
+}
+
+.context-empty {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: var(--space-md);
+}
+
+/* Sector Heatmap */
+.sector-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.heatmap-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.heatmap-item.hot {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error);
+}
+
+.heatmap-item.warm {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.heatmap-item.mild {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.heatmap-item.cool {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
+
+.heatmap-label {
+  font-weight: 500;
+}
+
+.heatmap-count {
+  font-weight: 600;
+}
+
+/* Tracking Summary */
+.tracking-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.tracking-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.tracking-item.following {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.tracking-item.watchlist {
+  background: var(--bg-primary);
+}
+
+.tracking-label {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.tracking-count {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Alert List */
+.alert-badge {
+  background: var(--error);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  margin-left: auto;
+}
+
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  background: var(--bg-primary);
+}
+
+.alert-item.conflict {
+  border-left: 2px solid var(--error);
+}
+
+.alert-item.consensus {
+  border-left: 2px solid var(--success);
+}
+
+.alert-item.high_volume {
+  border-left: 2px solid var(--accent-primary);
+}
+
+.alert-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.alert-message {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ENHANCED TRADE CARDS WITH WIN RATE
+   ═══════════════════════════════════════════════════════════ */
+
+.trade-card-enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.trade-card-enhanced:hover {
+  border-color: var(--border-medium);
+}
+
+.trade-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.trader-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.trader-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.trader-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.trader-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.trader-badge.following {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.trader-badge.watchlist {
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+}
+
+.win-rate-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.win-rate-badge.high {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.win-rate-badge.medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.win-rate-badge.low {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error);
+}
+
+.trade-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.market-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.sector-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  background: var(--bg-hover);
+  border-radius: 4px;
+  color: var(--text-tertiary);
+}
+
+.trade-details {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.trade-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trade-action.buy {
+  color: var(--success);
+}
+
+.trade-action.sell {
+  color: var(--error);
+}
+
+.trade-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.btn-sim-copy {
+  padding: var(--space-xs) var(--space-md);
+  background: var(--accent-glow);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-sim-copy:hover {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-view-market {
+  padding: var(--space-xs) var(--space-md);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-view-market:hover {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
 }
