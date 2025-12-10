@@ -1,6 +1,6 @@
 /**
  * Dashboard Component
- * Main application view combining all features
+ * Main application view with aggregate feed and individual wallet views
  */
 
 'use client';
@@ -11,27 +11,37 @@ import { PositionCard } from './PositionCard';
 import { TradeList } from './TradeList';
 import { PortfolioSummary } from './PortfolioSummary';
 import { ToastContainer } from './ToastNotifications';
-import { useWallets, usePortfolio, useTradeMonitor } from '@/hooks/usePolymarket';
+import { AggregateFeed } from './AggregateFeed';
+import { useWallets, usePortfolio } from '@/hooks/usePolymarket';
 import { WatchedWallet } from '@/lib/types';
+
+type ViewMode = 'feed' | 'wallet';
 
 export function Dashboard() {
     const { wallets, isLoaded, addWallet, removeWallet } = useWallets();
     const [selectedWallet, setSelectedWallet] = useState<WatchedWallet | null>(null);
+    const [viewMode, setViewMode] = useState<ViewMode>('feed');
 
     // Pass wallet label for notifications
-    const portfolio = usePortfolio(selectedWallet?.address ?? null, selectedWallet?.label);
-
-    // Monitor all wallets for new trades in the background
-    useTradeMonitor(wallets, isLoaded);
+    const portfolio = usePortfolio(
+        viewMode === 'wallet' ? selectedWallet?.address ?? null : null,
+        selectedWallet?.label
+    );
 
     const handleSelectWallet = (wallet: WatchedWallet) => {
         setSelectedWallet(wallet);
+        setViewMode('wallet');
+    };
+
+    const handleBackToFeed = () => {
+        setViewMode('feed');
+        setSelectedWallet(null);
     };
 
     const handleRemoveWallet = (id: string) => {
-        // Clear selection if removing the currently selected wallet
         if (selectedWallet?.id === id) {
             setSelectedWallet(null);
+            setViewMode('feed');
         }
         removeWallet(id);
     };
@@ -49,11 +59,28 @@ export function Dashboard() {
             {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-header">
-                    <h1 className="logo">
+                    <h1 className="logo" onClick={handleBackToFeed} style={{ cursor: 'pointer' }}>
                         <span className="logo-icon">🐋</span>
                         PolyTracker
                     </h1>
                     <p className="tagline">Whale Watching for Polymarket</p>
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="view-toggle">
+                    <button
+                        className={`toggle-btn ${viewMode === 'feed' ? 'active' : ''}`}
+                        onClick={handleBackToFeed}
+                    >
+                        📊 Feed
+                    </button>
+                    <button
+                        className={`toggle-btn ${viewMode === 'wallet' ? 'active' : ''}`}
+                        onClick={() => selectedWallet && setViewMode('wallet')}
+                        disabled={!selectedWallet}
+                    >
+                        👛 Wallet
+                    </button>
                 </div>
 
                 <WalletManager
@@ -76,16 +103,17 @@ export function Dashboard() {
 
             {/* Main Content */}
             <main className="main-content">
-                {!selectedWallet ? (
-                    <div className="empty-dashboard">
-                        <div className="empty-icon">🎯</div>
-                        <h2>Select a wallet to view positions</h2>
-                        <p>Add wallet addresses in the sidebar to start tracking whale activity on Polymarket.</p>
-                    </div>
-                ) : (
+                {viewMode === 'feed' ? (
+                    /* Aggregate Feed View */
+                    <AggregateFeed wallets={wallets} isEnabled={isLoaded} />
+                ) : selectedWallet ? (
+                    /* Individual Wallet View */
                     <>
                         <header className="content-header">
                             <div className="wallet-display">
+                                <button className="btn-back" onClick={handleBackToFeed}>
+                                    ← Back to Feed
+                                </button>
                                 <h2>{selectedWallet.label}</h2>
                                 <span className="wallet-address">{selectedWallet.address}</span>
                             </div>
@@ -139,6 +167,12 @@ export function Dashboard() {
                             <TradeList trades={portfolio.trades} isLoading={portfolio.isLoading} />
                         </section>
                     </>
+                ) : (
+                    <div className="empty-dashboard">
+                        <div className="empty-icon">🎯</div>
+                        <h2>Select a wallet to view details</h2>
+                        <p>Click on a wallet in the sidebar to see positions and trades.</p>
+                    </div>
                 )}
             </main>
         </div>
