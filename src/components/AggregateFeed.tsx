@@ -271,49 +271,57 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                     </div>
                 ) : (
                     <div className="trade-feed-list">
-                        {allTrades.slice(0, 50).map((trade) => (
-                            <div
-                                key={`${trade.walletLabel}-${trade.id}`}
-                                className={`trade-feed-item ${newTradeIds.has(trade.id) ? 'new-trade' : ''}`}
-                            >
-                                <div className="trade-wallet">
-                                    <span className="wallet-label">{trade.walletLabel}</span>
-                                    <span className={`side-indicator ${trade.side.toLowerCase()}`}>
-                                        {trade.side === 'BUY' ? '🟢' : '🔴'}
-                                    </span>
+                        {allTrades.slice(0, 50).map((trade, index) => {
+                            // Generate a unique key using multiple fields to handle undefined trade.id
+                            const uniqueKey = trade.id
+                                ? `${trade.walletLabel}-${trade.id}`
+                                : `${trade.walletLabel}-${trade.timestamp}-${trade.txHash || index}`;
+                            const isNew = trade.id ? newTradeIds.has(trade.id) : false;
+
+                            return (
+                                <div
+                                    key={uniqueKey}
+                                    className={`trade-feed-item ${isNew ? 'new-trade' : ''}`}
+                                >
+                                    <div className="trade-wallet">
+                                        <span className="wallet-label">{trade.walletLabel}</span>
+                                        <span className={`side-indicator ${trade.side.toLowerCase()}`}>
+                                            {trade.side === 'BUY' ? '🟢' : '🔴'}
+                                        </span>
+                                    </div>
+                                    <div className="trade-market">
+                                        <span className="market-title" title={trade.marketTitle}>
+                                            {trade.marketTitle.length > 60
+                                                ? trade.marketTitle.slice(0, 60) + '...'
+                                                : trade.marketTitle}
+                                        </span>
+                                    </div>
+                                    <div className="trade-details">
+                                        <span className={`outcome-badge ${trade.outcome.toLowerCase()}`}>
+                                            {trade.outcome}
+                                        </span>
+                                        <span className="trade-price">
+                                            @ {(trade.price * 100).toFixed(0)}¢
+                                        </span>
+                                        <span className="trade-size">
+                                            {trade.size.toLocaleString()} shares
+                                        </span>
+                                        <span className="trade-value">
+                                            {formatUSD(trade.usdcAmount)}
+                                        </span>
+                                    </div>
+                                    <div className="trade-time">
+                                        <a
+                                            href={`https://polygonscan.com/tx/${trade.txHash}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            {formatTime(trade.timestamp)}
+                                        </a>
+                                    </div>
                                 </div>
-                                <div className="trade-market">
-                                    <span className="market-title" title={trade.marketTitle}>
-                                        {trade.marketTitle.length > 60
-                                            ? trade.marketTitle.slice(0, 60) + '...'
-                                            : trade.marketTitle}
-                                    </span>
-                                </div>
-                                <div className="trade-details">
-                                    <span className={`outcome-badge ${trade.outcome.toLowerCase()}`}>
-                                        {trade.outcome}
-                                    </span>
-                                    <span className="trade-price">
-                                        @ {(trade.price * 100).toFixed(0)}¢
-                                    </span>
-                                    <span className="trade-size">
-                                        {trade.size.toLocaleString()} shares
-                                    </span>
-                                    <span className="trade-value">
-                                        {formatUSD(trade.usdcAmount)}
-                                    </span>
-                                </div>
-                                <div className="trade-time">
-                                    <a
-                                        href={`https://polygonscan.com/tx/${trade.txHash}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        {formatTime(trade.timestamp)}
-                                    </a>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
