@@ -13,12 +13,12 @@ import { PortfolioSummary } from './PortfolioSummary';
 import { ToastContainer } from './ToastNotifications';
 import { AggregateFeed } from './AggregateFeed';
 import { useWallets, usePortfolio } from '@/hooks/usePolymarket';
-import { WatchedWallet } from '@/lib/types';
+import { WatchedWallet, Tier } from '@/lib/types';
 
 type ViewMode = 'feed' | 'wallet';
 
 export function Dashboard() {
-    const { wallets, isLoaded, addWallet, removeWallet } = useWallets();
+    const { wallets, isLoaded, addWallet, removeWallet, updateWallet } = useWallets();
     const [selectedWallet, setSelectedWallet] = useState<WatchedWallet | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('feed');
 
@@ -46,6 +46,10 @@ export function Dashboard() {
         removeWallet(id);
     };
 
+    const handleAddWallet = async (address: string, label?: string, tier?: Tier, notes?: string) => {
+        return addWallet(address, label, tier, notes);
+    };
+
     if (!isLoaded) {
         return (
             <div className="dashboard loading-state">
@@ -63,7 +67,7 @@ export function Dashboard() {
                         <span className="logo-icon">🐋</span>
                         PolyTracker
                     </h1>
-                    <p className="tagline">Whale Watching for Polymarket</p>
+                    <p className="tagline">Intelligence Platform</p>
                 </div>
 
                 {/* View Mode Toggle */}
@@ -85,9 +89,10 @@ export function Dashboard() {
 
                 <WalletManager
                     wallets={wallets}
-                    onAddWallet={addWallet}
+                    onAddWallet={handleAddWallet}
                     onRemoveWallet={handleRemoveWallet}
                     onSelectWallet={handleSelectWallet}
+                    onUpdateWallet={updateWallet}
                     selectedWalletId={selectedWallet?.id ?? null}
                 />
 

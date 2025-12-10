@@ -24,8 +24,8 @@ export function useWallets() {
         setIsLoaded(true);
     }, []);
 
-    const addWallet = async (address: string, label?: string) => {
-        const newWallet = walletStorage.add(address, label);
+    const addWallet = async (address: string, label?: string, tier?: 'following' | 'watchlist', notes?: string) => {
+        const newWallet = walletStorage.add(address, label, tier, notes);
 
         // Resolve proxy address in background
         try {
