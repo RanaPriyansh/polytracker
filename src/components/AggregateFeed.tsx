@@ -1,13 +1,21 @@
 /**
- * Aggregate Trade Feed Component
+ * Aggregate Trade Feed Component v2.1
  * Shows all recent trades from ALL followed wallets in one feed
+ * 
+ * REFACTORED:
+ * - Uses fetchAllWalletsSafe for rate limiting
+ * - Uses useCallback for stable function references
+ * - Uses Decimal.js for volume calculations
  */
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import Decimal from 'decimal.js';
 import { Trade, WatchedWallet } from '@/lib/types';
 import { fetchTrades } from '@/lib/polymarket';
+import { fetchAllWalletsSafe } from '@/hooks/usePolymarket';
+import { formatUSD, formatRelativeTime } from '@/lib/utils';
 import {
     detectNewTrades,
     emitTradeToast,
@@ -37,22 +45,36 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
     const [soundOn, setSoundOn] = useState(true);
     const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
 
+    // Ref for timeout cleanup (fixes memory leak)
+    const highlightTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+
     // Initialize sound preference
     useEffect(() => {
         setSoundOn(isSoundEnabled());
     }, []);
 
-    // Fetch trades from all wallets
-    const fetchAllTrades = async (checkForNew: boolean = false) => {
+    // Cleanup timeouts on unmount
+    useEffect(() => {
+        return () => {
+            highlightTimeoutsRef.current.forEach(t => clearTimeout(t));
+        };
+    }, []);
+
+    // Fetch trades from all wallets with rate limiting
+    const fetchAllTrades = useCallback(async (checkForNew: boolean = false) => {
         if (!isEnabled || wallets.length === 0) return;
 
         setIsLoading(true);
         const aggregatedTrades: AggregateTradeWithWallet[] = [];
         const newIds: string[] = [];
 
-        for (const wallet of wallets) {
-            try {
-                const trades = await fetchTrades(wallet.address);
+        try {
+            // Use rate-limited batch fetching
+            const tradesMap = await fetchAllWalletsSafe(wallets, fetchTrades);
+
+            for (const wallet of wallets) {
+                const trades = tradesMap.get(wallet.id);
+                if (!trades) continue;
 
                 // Detect new trades if checking
                 if (checkForNew) {
@@ -66,7 +88,7 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                     if (newTrades.length > 0) {
                         for (const trade of newTrades.slice(0, 3)) {
                             emitTradeToast(wallet.label, trade, soundOn);
-                            newIds.push(trade.id);
+                            if (trade.id) newIds.push(trade.id);
                         }
                     }
                 } else {
@@ -81,9 +103,9 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                         walletLabel: wallet.label,
                     });
                 }
-            } catch (error) {
-                console.warn(`Failed to fetch trades for ${wallet.label}:`, error);
             }
+        } catch (error) {
+            console.warn('Failed to fetch trades:', error);
         }
 
         // Sort by timestamp, newest first
@@ -91,23 +113,26 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
             (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
 
-        // Update new trade IDs for highlighting
+        // Update new trade IDs for highlighting with proper cleanup
         if (newIds.length > 0) {
             setNewTradeIds(prev => new Set([...prev, ...newIds]));
-            // Clear highlighting after 5 seconds
-            setTimeout(() => {
+
+            const timeout = setTimeout(() => {
                 setNewTradeIds(prev => {
                     const updated = new Set(prev);
                     newIds.forEach(id => updated.delete(id));
                     return updated;
                 });
+                highlightTimeoutsRef.current.delete(timeout);
             }, 5000);
+
+            highlightTimeoutsRef.current.add(timeout);
         }
 
         setAllTrades(aggregatedTrades);
         setLastRefresh(new Date());
         setIsLoading(false);
-    };
+    }, [isEnabled, wallets, soundOn]);
 
     // Initial fetch and periodic refresh
     useEffect(() => {
@@ -116,21 +141,27 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
         // Initial fetch (don't check for new trades)
         fetchAllTrades(false);
 
-        // Refresh every 30 seconds (check for new trades)
-        const interval = setInterval(() => fetchAllTrades(true), 30000);
+        // Refresh every 60 seconds (rate limit friendly)
+        const interval = setInterval(() => fetchAllTrades(true), 60000);
 
         return () => clearInterval(interval);
-    }, [isEnabled, wallets.length, soundOn]);
+    }, [fetchAllTrades, isEnabled, wallets.length]);
 
-    // Calculate market statistics
+    // Calculate market statistics with Decimal.js precision
     const marketStats = useMemo(() => {
-        const statsMap = new Map<string, MarketStats>();
+        const statsMap = new Map<string, {
+            marketTitle: string;
+            marketSlug: string;
+            tradeCount: number;
+            totalVolume: Decimal;
+            wallets: string[]
+        }>();
 
         for (const trade of allTrades) {
             const existing = statsMap.get(trade.marketSlug);
             if (existing) {
                 existing.tradeCount++;
-                existing.totalVolume += trade.usdcAmount;
+                existing.totalVolume = existing.totalVolume.plus(trade.usdcAmount || 0);
                 if (!existing.wallets.includes(trade.walletLabel)) {
                     existing.wallets.push(trade.walletLabel);
                 }
@@ -139,46 +170,27 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                     marketTitle: trade.marketTitle,
                     marketSlug: trade.marketSlug,
                     tradeCount: 1,
-                    totalVolume: trade.usdcAmount,
+                    totalVolume: new Decimal(trade.usdcAmount || 0),
                     wallets: [trade.walletLabel],
                 });
             }
         }
 
+        // Convert to final format with number volumes
         return Array.from(statsMap.values())
+            .map(s => ({ ...s, totalVolume: s.totalVolume.toNumber() }))
             .sort((a, b) => b.tradeCount - a.tradeCount)
-            .slice(0, 8);
+            .slice(0, 8) as MarketStats[];
     }, [allTrades]);
 
-    const toggleSound = () => {
+    const toggleSound = useCallback(() => {
         const newValue = !soundOn;
         setSoundOn(newValue);
         setSoundEnabled(newValue);
         if (newValue) {
             playNotificationSound(); // Test the sound
         }
-    };
-
-    const formatTime = (timestamp: string) => {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    };
-
-    const formatUSD = (value: number) => {
-        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-        if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
-        return `$${value.toFixed(0)}`;
-    };
+    }, [soundOn]);
 
     if (!isEnabled || wallets.length === 0) {
         return (
@@ -217,7 +229,7 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                     </button>
                     {lastRefresh && (
                         <span className="last-refresh">
-                            Updated {formatTime(lastRefresh.toISOString())}
+                            Updated {formatRelativeTime(lastRefresh.toISOString())}
                         </span>
                     )}
                 </div>
@@ -316,7 +328,7 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                                             target="_blank"
                                             rel="noopener noreferrer"
                                         >
-                                            {formatTime(trade.timestamp)}
+                                            {formatRelativeTime(trade.timestamp)}
                                         </a>
                                     </div>
                                 </div>

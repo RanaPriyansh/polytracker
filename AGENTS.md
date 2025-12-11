@@ -197,6 +197,9 @@ npm run lint
 3. **Always use debounce** for rapid user actions (300ms)
 4. **Always add null checks** before accessing nested properties
 5. **Always run `npm run dev`** after making changes
+6. **Always use `useCallback`** for async functions in components
+7. **Always use `fetchAllWalletsSafe`** for batch wallet operations
+8. **Always import utilities** from `lib/utils.ts` (formatUSD, formatRelativeTime)
 
 ---
 

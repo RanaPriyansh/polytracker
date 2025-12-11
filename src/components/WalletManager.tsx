@@ -7,6 +7,7 @@
 
 import { useState, useMemo } from 'react';
 import { WatchedWallet, Tier } from '@/lib/types';
+import { truncateAddress } from '@/lib/utils';
 import { AddWalletModal } from './AddWalletModal';
 
 interface WalletManagerProps {
@@ -46,10 +47,6 @@ export function WalletManager({
         following: wallets.filter(w => w.tier === 'following'),
         watchlist: wallets.filter(w => w.tier === 'watchlist'),
     }), [wallets]);
-
-    const truncateAddress = (addr: string) => {
-        return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-    };
 
     const handlePromote = (id: string, newTier: Tier) => {
         onUpdateWallet(id, { tier: newTier });
