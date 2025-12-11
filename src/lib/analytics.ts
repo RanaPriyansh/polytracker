@@ -1,10 +1,14 @@
 /**
- * Analytics Engine
+ * Analytics Engine v2.1
  * Computes trader stats, sector detection, and win rate calculations
  * Implements caching to avoid API spam (6-hour cache)
+ * 
+ * HOTFIXES APPLIED:
+ * - CRIT-001: Market resolution handling for held positions
+ * - CRIT-003: Null/undefined field safety checks
  */
 
-import { Trade, TraderStats, Sector, TraderBadge } from './types';
+import { Trade, TraderStats, Sector, TraderBadge, Position } from './types';
 import { walletStorage } from './storage';
 import { fetchTrades } from './polymarket';
 
@@ -21,7 +25,16 @@ const SECTOR_KEYWORDS: Record<Sector, RegExp> = {
     Other: /.*/,  // Fallback
 };
 
-export function detectSector(marketTitle: string): Sector {
+/**
+ * Detect sector from market title with null safety (CRIT-003 fix)
+ */
+export function detectSector(marketTitle: string | null | undefined): Sector {
+    // CRIT-003: Handle null/undefined marketTitle
+    if (!marketTitle || typeof marketTitle !== 'string') {
+        console.warn('detectSector: Received invalid marketTitle, defaulting to Other');
+        return 'Other';
+    }
+
     for (const [sector, regex] of Object.entries(SECTOR_KEYWORDS)) {
         if (sector === 'Other') continue; // Skip fallback
         if (regex.test(marketTitle)) {
@@ -29,6 +42,16 @@ export function detectSector(marketTitle: string): Sector {
         }
     }
     return 'Other';
+}
+
+// ═══════════════════════════════════════════════════════════
+// Market Resolution Info (CRIT-001 Fix)
+// ═══════════════════════════════════════════════════════════
+
+export interface MarketResolutionInfo {
+    conditionId: string;
+    isClosed: boolean;
+    winningOutcome?: string; // 'YES', 'NO', or specific outcome
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -48,10 +71,17 @@ interface TradeAnalysis {
 
 /**
  * Analyze trades to compute trader statistics
- * Win = SELL trade with higher price than BUY for same market
- * Simplified: We estimate based on price vs 0.5 (break-even point)
+ * 
+ * CRIT-001 Fix: Now handles market resolution for held positions
+ * CRIT-003 Fix: Safe handling of null/undefined fields
+ * 
+ * @param trades - List of trades to analyze
+ * @param resolutions - Optional map of market resolutions for accurate P/L
  */
-export function analyzeTrades(trades: Trade[]): TradeAnalysis {
+export function analyzeTrades(
+    trades: Trade[],
+    resolutions: Map<string, MarketResolutionInfo> = new Map()
+): TradeAnalysis {
     if (trades.length === 0) {
         return getEmptyAnalysis();
     }
@@ -116,18 +146,34 @@ export function analyzeTrades(trades: Trade[]): TradeAnalysis {
                 grossLoss += Math.abs(pnl);
                 sectorStats[sector].losses++;
             }
-        } else if (buyShares > 0) {
-            // Open position - estimate win/loss based on price
-            const avgPrice = buyValue / buyShares;
-            if (avgPrice < 0.4) {
-                // Likely speculative bet, count as potential win if price is low
-                sectorStats[sector].wins++;
-                wins++;
-            } else if (avgPrice > 0.7) {
-                // High confidence bet
-                sectorStats[sector].wins++;
-                wins++;
+        }
+
+        // CRIT-001 FIX: Handle held positions with market resolution
+        const remainingShares = buyShares - sellShares;
+        if (remainingShares > 0) {
+            const conditionId = marketTrades[0].conditionId;
+            const outcome = marketTrades[0].outcome;
+            const resolution = resolutions.get(conditionId);
+
+            if (resolution?.isClosed) {
+                // Market has resolved - value at $1 (win) or $0 (loss)
+                const isWinner = resolution.winningOutcome === outcome;
+                const finalPrice = isWinner ? 1.0 : 0.0;
+                const avgBuyPrice = buyValue / buyShares;
+                const resolutionPnL = (finalPrice - avgBuyPrice) * remainingShares;
+
+                if (resolutionPnL > 0) {
+                    wins++;
+                    grossProfit += resolutionPnL;
+                    sectorStats[sector].wins++;
+                } else {
+                    losses++;
+                    grossLoss += Math.abs(resolutionPnL);
+                    sectorStats[sector].losses++;
+                }
             }
+            // If market is still open, we don't count it as win or loss
+            // This is more accurate than guessing from entry price
         }
     }
 

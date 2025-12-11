@@ -59,6 +59,57 @@ export function useWallets() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Rate Limiting Utilities (HIGH-001 Fix)
+// ═══════════════════════════════════════════════════════════
+
+const CHUNK_SIZE = 3; // Conservative limit
+const DELAY_MS = 1100; // 1.1 seconds (safe for 1 req/sec limit)
+
+/**
+ * Delay execution for rate limiting
+ */
+const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
+
+/**
+ * Fetch data for all wallets with rate limiting
+ * Processes wallets in chunks to avoid 429 errors
+ */
+export async function fetchAllWalletsSafe<T>(
+    wallets: WatchedWallet[],
+    fetcher: (address: string) => Promise<T>
+): Promise<Map<string, T | null>> {
+    const results = new Map<string, T | null>();
+
+    // Process in chunks
+    for (let i = 0; i < wallets.length; i += CHUNK_SIZE) {
+        const chunk = wallets.slice(i, i + CHUNK_SIZE);
+
+        // Fetch chunk in parallel
+        const chunkPromises = chunk.map(async w => {
+            try {
+                const data = await fetcher(w.address);
+                return { id: w.id, data };
+            } catch (e) {
+                console.error(`Failed to fetch ${w.label}:`, e);
+                return { id: w.id, data: null };
+            }
+        });
+
+        const chunkResults = await Promise.all(chunkPromises);
+        for (const result of chunkResults) {
+            results.set(result.id, result.data);
+        }
+
+        // Wait before next chunk (unless it's the last one)
+        if (i + CHUNK_SIZE < wallets.length) {
+            await delay(DELAY_MS);
+        }
+    }
+
+    return results;
+}
+
+// ═══════════════════════════════════════════════════════════
 // Position & Trade Hooks
 // ═══════════════════════════════════════════════════════════
 
@@ -150,26 +201,34 @@ export function usePortfolio(walletAddress: string | null, walletLabel?: string)
 }
 
 // ═══════════════════════════════════════════════════════════
-// Background Trade Monitoring Hook
+// Background Trade Monitoring Hook (Updated with Rate Limiting)
 // ═══════════════════════════════════════════════════════════
 
 /**
  * Monitors all tracked wallets for new trades in the background
  * This runs independently of which wallet is selected
+ * 
+ * HIGH-001 FIX: Now uses rate-limited batch fetching
  */
 export function useTradeMonitor(wallets: WatchedWallet[], isEnabled: boolean = true) {
     const [lastCheck, setLastCheck] = useState<Date | null>(null);
     const [newTradeCount, setNewTradeCount] = useState(0);
+    const [isChecking, setIsChecking] = useState(false);
     const isFirstRunRef = useRef(true);
 
     const checkAllWallets = useCallback(async () => {
-        if (!isEnabled || wallets.length === 0) return;
+        if (!isEnabled || wallets.length === 0 || isChecking) return;
 
+        setIsChecking(true);
         let totalNewTrades = 0;
 
-        for (const wallet of wallets) {
-            try {
-                const trades = await fetchTrades(wallet.address);
+        try {
+            // HIGH-001 FIX: Use rate-limited batch fetching
+            const tradesMap = await fetchAllWalletsSafe(wallets, fetchTrades);
+
+            for (const wallet of wallets) {
+                const trades = tradesMap.get(wallet.id);
+                if (!trades) continue;
 
                 // On first run, just initialize tracking without notifications
                 const shouldNotify = !isFirstRunRef.current;
@@ -181,21 +240,22 @@ export function useTradeMonitor(wallets: WatchedWallet[], isEnabled: boolean = t
                 );
 
                 if (shouldNotify && newTrades.length > 0) {
-                    // Emit in-app toasts for new trades
+                    // Emit in-app toasts for new trades (limit to 2 to avoid spam)
                     for (const trade of newTrades.slice(0, 2)) {
                         emitTradeToast(wallet.label, trade);
                     }
                     totalNewTrades += newTrades.length;
                 }
-            } catch (error) {
-                console.warn(`Failed to check trades for ${wallet.label}:`, error);
             }
+        } catch (error) {
+            console.warn('Failed to check trades:', error);
         }
 
         isFirstRunRef.current = false;
         setNewTradeCount(totalNewTrades);
         setLastCheck(new Date());
-    }, [wallets, isEnabled]);
+        setIsChecking(false);
+    }, [wallets, isEnabled, isChecking]);
 
     // Initial check and periodic monitoring
     useEffect(() => {
@@ -204,8 +264,8 @@ export function useTradeMonitor(wallets: WatchedWallet[], isEnabled: boolean = t
         // Initial check
         checkAllWallets();
 
-        // Check every 30 seconds
-        const interval = setInterval(checkAllWallets, 30_000);
+        // Check every 60 seconds (increased from 30 to reduce API load)
+        const interval = setInterval(checkAllWallets, 60_000);
 
         return () => clearInterval(interval);
     }, [checkAllWallets, isEnabled, wallets.length]);
@@ -213,6 +273,8 @@ export function useTradeMonitor(wallets: WatchedWallet[], isEnabled: boolean = t
     return {
         lastCheck,
         newTradeCount,
+        isChecking,
         checkNow: checkAllWallets,
     };
 }
+
