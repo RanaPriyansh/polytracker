@@ -70,7 +70,7 @@ export function ToastContainer() {
                     className={`toast toast-${toast.type}`}
                     onClick={() => {
                         if (toast.trade?.txHash) {
-                            window.open(`https://polygonscan.com/tx/${toast.trade.txHash}`, '_blank');
+                            window.open(`https://polygonscan.com/tx/${toast.trade.txHash}`, '_blank', 'noopener,noreferrer');
                         }
                         removeToast(toast.id);
                     }}

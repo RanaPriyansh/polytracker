@@ -181,7 +181,7 @@ function sendTradeNotification({ walletLabel, trade }: TradeNotificationData): v
     setTimeout(() => notification.close(), 10000);
 
     notification.onclick = () => {
-        window.open(`https://polygonscan.com/tx/${trade.txHash}`, '_blank');
+        window.open(`https://polygonscan.com/tx/${trade.txHash}`, '_blank', 'noopener,noreferrer');
         notification.close();
     };
 }
