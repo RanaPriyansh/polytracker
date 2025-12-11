@@ -67,7 +67,12 @@ export function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModalProps) 
             <div className="modal-content" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>Add Trader</h2>
-                    <button className="modal-close" onClick={handleClose} disabled={isLoading}>
+                    <button
+                        className="modal-close"
+                        onClick={handleClose}
+                        disabled={isLoading}
+                        aria-label="Close"
+                    >
                         ×
                     </button>
                 </div>
@@ -104,10 +109,16 @@ export function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModalProps) 
 
                         {/* Tier Selection */}
                         <div className="form-group">
-                            <label>Tracking Tier</label>
-                            <div className="tier-selector">
+                            <label id="tier-label">Tracking Tier</label>
+                            <div
+                                className="tier-selector"
+                                role="radiogroup"
+                                aria-labelledby="tier-label"
+                            >
                                 <button
                                     type="button"
+                                    role="radio"
+                                    aria-checked={tier === 'following'}
                                     className={`tier-option ${tier === 'following' ? 'active following' : ''}`}
                                     onClick={() => setTier('following')}
                                     disabled={isLoading}
@@ -120,6 +131,8 @@ export function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModalProps) 
                                 </button>
                                 <button
                                     type="button"
+                                    role="radio"
+                                    aria-checked={tier === 'watchlist'}
                                     className={`tier-option ${tier === 'watchlist' ? 'active watchlist' : ''}`}
                                     onClick={() => setTier('watchlist')}
                                     disabled={isLoading}
