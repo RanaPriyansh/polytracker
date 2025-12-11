@@ -134,7 +134,7 @@ export async function resolveProxy(userAddress: string): Promise<string> {
     try {
         // Try to get user profile which contains proxy wallet
         const users = await fetchWithRetry<UserProfile[]>(
-            `${DATA_API_BASE}/users?address=${userAddress.toLowerCase()}`
+            `${DATA_API_BASE}/users?address=${encodeURIComponent(userAddress.toLowerCase())}`
         );
 
         if (users && users.length > 0 && users[0].proxyWallet) {
@@ -163,7 +163,7 @@ export async function fetchPositions(walletAddress: string): Promise<Position[]>
 
     // The API now returns title, slug, outcome directly in the response
     const rawPositions = await fetchWithRetry<PolymarketPositionWithMarketInfo[]>(
-        `${DATA_API_BASE}/positions?user=${proxyAddress}`
+        `${DATA_API_BASE}/positions?user=${encodeURIComponent(proxyAddress)}`
     );
 
     const positions: Position[] = rawPositions.map((pos) => {
@@ -212,7 +212,7 @@ export async function fetchTrades(walletAddress: string, limit = 50): Promise<Tr
 
     // The API returns title, slug directly in the response
     const rawTrades = await fetchWithRetry<PolymarketTradeWithMarketInfo[]>(
-        `${DATA_API_BASE}/trades?user=${proxyAddress}&limit=${limit}`
+        `${DATA_API_BASE}/trades?user=${encodeURIComponent(proxyAddress)}&limit=${limit}`
     );
 
     const trades: Trade[] = rawTrades.map((trade) => {
@@ -256,7 +256,7 @@ async function getMarketDetails(conditionId: string): Promise<PolymarketMarket |
 
     try {
         const markets = await fetchWithRetry<PolymarketMarket[]>(
-            `${GAMMA_API_BASE}/markets?condition_id=${conditionId}`
+            `${GAMMA_API_BASE}/markets?condition_id=${encodeURIComponent(conditionId)}`
         );
 
         if (markets && markets.length > 0) {
@@ -276,7 +276,7 @@ async function getMarketDetails(conditionId: string): Promise<PolymarketMarket |
 export async function fetchPrice(tokenId: string): Promise<number> {
     try {
         const data = await fetchWithRetry<{ mid: string }>(
-            `${CLOB_API_BASE}/midpoint?token_id=${tokenId}`
+            `${CLOB_API_BASE}/midpoint?token_id=${encodeURIComponent(tokenId)}`
         );
         return parseFloat(data.mid) || 0;
     } catch {
@@ -292,7 +292,7 @@ export async function fetchPortfolioValue(walletAddress: string): Promise<number
 
     try {
         const data = await fetchWithRetry<{ value: string }>(
-            `${DATA_API_BASE}/value?user=${proxyAddress}`
+            `${DATA_API_BASE}/value?user=${encodeURIComponent(proxyAddress)}`
         );
         return parseFloat(data.value) || 0;
     } catch {
