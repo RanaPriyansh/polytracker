@@ -43,15 +43,19 @@ export const PositionSchema = z.object({
     conditionId: z.string(),
     marketSlug: z.string(),
     marketTitle: z.string(),
+    sector: z.string().optional(),
     outcome: z.string(),
     tokenId: z.string(),
     size: z.number().nonnegative(),
-    avgPrice: z.number().min(0).max(1),
+    avgEntryPrice: z.number().min(0).max(1),
     currentPrice: z.number().min(0).max(1),
     costBasis: z.number().nonnegative(),
     currentValue: z.number().nonnegative(),
     unrealizedPnL: z.number(),
-    redemptionStatus: z.string(),
+    unrealizedPnLPercent: z.number(),
+    redemptionStatus: z.enum(['ACTIVE', 'RESOLVED', 'REDEEMED']),
+    createdAt: z.string(),
+    updatedAt: z.string(),
 });
 
 // ═══════════════════════════════════════════════════════════
