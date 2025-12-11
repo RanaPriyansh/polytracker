@@ -10,10 +10,14 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.12",
+    "@types/lodash-es": "^4.17.12",
+    "decimal.js": "^10.6.0",
+    "lodash-es": "^4.17.21",
     "next": "16.0.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
