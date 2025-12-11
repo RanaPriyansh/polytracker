@@ -30,6 +30,26 @@ interface MarketStats {
     wallets: string[];
 }
 
+const formatTime = (timestamp: string, now: Date) => {
+    const date = new Date(timestamp);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+};
+
+const formatUSD = (value: number) => {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
+    return `$${value.toFixed(0)}`;
+};
+
 export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
     const [allTrades, setAllTrades] = useState<AggregateTradeWithWallet[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -159,27 +179,6 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
         }
     };
 
-    const formatTime = (timestamp: string) => {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    };
-
-    const formatUSD = (value: number) => {
-        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-        if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
-        return `$${value.toFixed(0)}`;
-    };
-
     if (!isEnabled || wallets.length === 0) {
         return (
             <div className="aggregate-feed-empty">
@@ -189,6 +188,9 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
             </div>
         );
     }
+
+    // Optimization: Capture current time once per render
+    const now = new Date();
 
     return (
         <div className="aggregate-feed">
@@ -217,7 +219,7 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                     </button>
                     {lastRefresh && (
                         <span className="last-refresh">
-                            Updated {formatTime(lastRefresh.toISOString())}
+                            Updated {formatTime(lastRefresh.toISOString(), now)}
                         </span>
                     )}
                 </div>
@@ -316,7 +318,7 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                                             target="_blank"
                                             rel="noopener noreferrer"
                                         >
-                                            {formatTime(trade.timestamp)}
+                                            {formatTime(trade.timestamp, now)}
                                         </a>
                                     </div>
                                 </div>

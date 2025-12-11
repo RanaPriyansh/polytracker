@@ -12,37 +12,40 @@ interface TradeListProps {
     isLoading?: boolean;
 }
 
+// Optimization: Instantiate formatter once outside component
+const usdFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+});
+
+const formatUSD = (value: number) => {
+    return usdFormatter.format(value);
+};
+
+const formatPrice = (value: number) => {
+    return `${(value * 100).toFixed(1)}¢`;
+};
+
+// Optimization: Calculate diffs based on passed 'now' date to avoid new Date() per row
+const formatTime = (timestamp: string, now: Date) => {
+    const date = new Date(timestamp);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+};
+
+const truncateHash = (hash: string) => {
+    return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
+};
+
 export function TradeList({ trades, isLoading }: TradeListProps) {
-    const formatUSD = (value: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-        }).format(value);
-    };
-
-    const formatPrice = (value: number) => {
-        return `${(value * 100).toFixed(1)}¢`;
-    };
-
-    const formatTime = (timestamp: string) => {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    };
-
-    const truncateHash = (hash: string) => {
-        return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
-    };
-
     if (isLoading) {
         return (
             <div className="trade-list">
@@ -62,6 +65,9 @@ export function TradeList({ trades, isLoading }: TradeListProps) {
             </div>
         );
     }
+
+    // Optimization: Capture current time once per render
+    const now = new Date();
 
     return (
         <div className="trade-list">
@@ -105,7 +111,7 @@ export function TradeList({ trades, isLoading }: TradeListProps) {
                                     rel="noopener noreferrer"
                                     title={trade.txHash}
                                 >
-                                    {formatTime(trade.timestamp)}
+                                    {formatTime(trade.timestamp, now)}
                                 </a>
                             </td>
                         </tr>
