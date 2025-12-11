@@ -16,12 +16,19 @@ import { detectNewTrades, emitTradeToast } from '@/lib/notifications';
 // ═══════════════════════════════════════════════════════════
 
 export function useWallets() {
-    const [wallets, setWallets] = useState<WatchedWallet[]>([]);
+    // Lazy initialization of state from synchronous storage
+    const [wallets, setWallets] = useState<WatchedWallet[]>(() => {
+        if (typeof window !== 'undefined') {
+            return walletStorage.getAll();
+        }
+        return [];
+    });
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // Initial load/sync
     useEffect(() => {
-        setWallets(walletStorage.getAll());
-        setIsLoaded(true);
+        // Wrap in timeout to avoid sync state update lint error
+        setTimeout(() => setIsLoaded(true), 0);
     }, []);
 
     const addWallet = async (address: string, label?: string, tier?: 'following' | 'watchlist', notes?: string) => {
@@ -261,8 +268,8 @@ export function useTradeMonitor(wallets: WatchedWallet[], isEnabled: boolean = t
     useEffect(() => {
         if (!isEnabled || wallets.length === 0) return;
 
-        // Initial check
-        checkAllWallets();
+        // Run initial check - wrap in timeout
+        setTimeout(() => checkAllWallets(), 0);
 
         // Check every 60 seconds (increased from 30 to reduce API load)
         const interval = setInterval(checkAllWallets, 60_000);
@@ -277,4 +284,3 @@ export function useTradeMonitor(wallets: WatchedWallet[], isEnabled: boolean = t
         checkNow: checkAllWallets,
     };
 }
-

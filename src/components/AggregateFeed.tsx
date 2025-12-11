@@ -6,16 +6,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Trade, WatchedWallet } from '@/lib/types';
-import { fetchTrades } from '@/lib/polymarket';
+import { WatchedWallet } from '@/lib/types';
 import {
-    detectNewTrades,
-    emitTradeToast,
     playNotificationSound,
     isSoundEnabled,
-    setSoundEnabled,
-    AggregateTradeWithWallet
+    setSoundEnabled
 } from '@/lib/notifications';
+import { useAggregateFeed } from '@/hooks/useAggregateFeed';
 
 interface AggregateFeedProps {
     wallets: WatchedWallet[];
@@ -31,96 +28,30 @@ interface MarketStats {
 }
 
 export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
-    const [allTrades, setAllTrades] = useState<AggregateTradeWithWallet[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-    const [soundOn, setSoundOn] = useState(true);
-    const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
+    // Lazy init for sound preference
+    const [soundOn, setSoundOn] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return isSoundEnabled();
+        }
+        return false;
+    });
 
-    // Initialize sound preference
+    // Use the optimized hook
+    const { allTrades, isLoading, lastRefresh, newTradeIds, refresh } = useAggregateFeed(wallets, isEnabled);
+
+    // Handle sound effects when new trades appear
     useEffect(() => {
-        setSoundOn(isSoundEnabled());
-    }, []);
-
-    // Fetch trades from all wallets
-    const fetchAllTrades = async (checkForNew: boolean = false) => {
-        if (!isEnabled || wallets.length === 0) return;
-
-        setIsLoading(true);
-        const aggregatedTrades: AggregateTradeWithWallet[] = [];
-        const newIds: string[] = [];
-
-        for (const wallet of wallets) {
-            try {
-                const trades = await fetchTrades(wallet.address);
-
-                // Detect new trades if checking
-                if (checkForNew) {
-                    const { newTrades } = detectNewTrades(
-                        wallet.address,
-                        wallet.label,
-                        trades,
-                        false
-                    );
-
-                    if (newTrades.length > 0) {
-                        for (const trade of newTrades.slice(0, 3)) {
-                            emitTradeToast(wallet.label, trade, soundOn);
-                            newIds.push(trade.id);
-                        }
-                    }
-                } else {
-                    // Initialize tracking on first load
-                    detectNewTrades(wallet.address, wallet.label, trades, false);
-                }
-
-                // Add wallet label to each trade
-                for (const trade of trades) {
-                    aggregatedTrades.push({
-                        ...trade,
-                        walletLabel: wallet.label,
-                    });
-                }
-            } catch (error) {
-                console.warn(`Failed to fetch trades for ${wallet.label}:`, error);
-            }
+        if (newTradeIds.size > 0 && soundOn) {
+            playNotificationSound();
         }
+    }, [newTradeIds, soundOn]);
 
-        // Sort by timestamp, newest first
-        aggregatedTrades.sort(
-            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-
-        // Update new trade IDs for highlighting
-        if (newIds.length > 0) {
-            setNewTradeIds(prev => new Set([...prev, ...newIds]));
-            // Clear highlighting after 5 seconds
-            setTimeout(() => {
-                setNewTradeIds(prev => {
-                    const updated = new Set(prev);
-                    newIds.forEach(id => updated.delete(id));
-                    return updated;
-                });
-            }, 5000);
+    const handleRefresh = async () => {
+        const newIds = await refresh();
+        if (newIds && newIds.length > 0 && soundOn) {
+             playNotificationSound();
         }
-
-        setAllTrades(aggregatedTrades);
-        setLastRefresh(new Date());
-        setIsLoading(false);
     };
-
-    // Initial fetch and periodic refresh
-    useEffect(() => {
-        if (!isEnabled || wallets.length === 0) return;
-
-        // Initial fetch (don't check for new trades)
-        fetchAllTrades(false);
-
-        // Refresh every 30 seconds (check for new trades)
-        const interval = setInterval(() => fetchAllTrades(true), 30000);
-
-        return () => clearInterval(interval);
-    }, [isEnabled, wallets.length, soundOn]);
 
     // Calculate market statistics
     const marketStats = useMemo(() => {
@@ -210,7 +141,7 @@ export function AggregateFeed({ wallets, isEnabled }: AggregateFeedProps) {
                     </button>
                     <button
                         className="btn-refresh-feed"
-                        onClick={() => fetchAllTrades(true)}
+                        onClick={handleRefresh}
                         disabled={isLoading}
                     >
                         {isLoading ? '⏳' : '🔄'} Refresh

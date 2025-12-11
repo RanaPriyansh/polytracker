@@ -3,13 +3,13 @@
  * Handles all communication with Polymarket APIs with retry logic and error handling
  */
 
+import { Decimal } from 'decimal.js';
 import {
     Position,
     Trade,
-    PolymarketPosition,
-    PolymarketTrade,
     PolymarketMarket
 } from './types';
+import { PolymarketPositionAPISchema, PolymarketTradeAPISchema } from './api-schemas';
 
 // ═══════════════════════════════════════════════════════════
 // Configuration
@@ -28,23 +28,6 @@ const MAX_RETRIES = 1; // Reduced retries for faster failure
 
 interface FetchOptions extends RequestInit {
     timeout?: number;
-}
-
-// Extending the imported PolymarketPosition type to include new fields
-// In a real scenario, this would typically be done by modifying the `types.ts` file
-// or by using declaration merging if the original type is declared globally.
-// For the purpose of this exercise, we'll define a local interface that
-// represents the *expected* structure from the API after the change.
-// This assumes the API now returns 'title' and 'slug' directly in the position object.
-export interface PolymarketPositionWithMarketInfo extends PolymarketPosition {
-    title?: string; // Market title
-    slug?: string;  // Market slug
-}
-
-// Similarly for PolymarketTrade
-export interface PolymarketTradeWithMarketInfo extends PolymarketTrade {
-    title?: string; // Market title
-    slug?: string;  // Market slug
 }
 
 class APIError extends Error {
@@ -161,43 +144,55 @@ export async function resolveProxy(userAddress: string): Promise<string> {
 export async function fetchPositions(walletAddress: string): Promise<Position[]> {
     const proxyAddress = await resolveProxy(walletAddress);
 
-    // The API now returns title, slug, outcome directly in the response
-    const rawPositions = await fetchWithRetry<PolymarketPositionWithMarketInfo[]>(
+    const rawPositions = await fetchWithRetry<unknown[]>(
         `${DATA_API_BASE}/positions?user=${proxyAddress}`
     );
 
-    const positions: Position[] = rawPositions.map((pos) => {
-        const size = parseFloat(pos.size) || 0;
-        const avgEntryPrice = parseFloat(pos.avgPrice) || 0;
-        const currentPrice = parseFloat(pos.curPrice) || 0;
-        const currentValue = size * currentPrice;
-        const costBasis = size * avgEntryPrice;
-        const unrealizedPnL = currentValue - costBasis;
-        const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;
+    const positions: Position[] = [];
 
-        return {
+    for (const rawPos of rawPositions) {
+        const result = PolymarketPositionAPISchema.safeParse(rawPos);
+        if (!result.success) {
+            console.warn(`Skipping invalid position for ${walletAddress}:`, result.error);
+            continue;
+        }
+        const pos = result.data;
+
+        // Use Decimal.js for money math
+        const size = new Decimal(pos.size || 0);
+        const avgEntryPrice = new Decimal(pos.avgPrice || 0);
+        const currentPrice = new Decimal(pos.curPrice || 0);
+
+        const currentValue = size.times(currentPrice);
+        const costBasis = size.times(avgEntryPrice);
+        const unrealizedPnL = currentValue.minus(costBasis);
+
+        let unrealizedPnLPercent = new Decimal(0);
+        if (costBasis.gt(0)) {
+            unrealizedPnLPercent = unrealizedPnL.div(costBasis).times(100);
+        }
+
+        positions.push({
             id: `${pos.conditionId}-${pos.outcomeIndex}`,
             walletAddress,
             proxyWallet: pos.proxyWallet,
             conditionId: pos.conditionId,
-            // Use title/slug from API response directly
             marketSlug: pos.slug || pos.conditionId.slice(0, 16),
             marketTitle: pos.title || 'Unknown Market',
-            // Use outcome from API (e.g., "Yes", "Eagles") instead of generic YES/NO
             outcome: (pos.outcome || (pos.outcomeIndex === 0 ? 'YES' : 'NO')).toUpperCase(),
             tokenId: pos.asset,
-            size,
-            avgEntryPrice,
-            currentPrice,
-            currentValue,
-            costBasis,
-            unrealizedPnL,
-            unrealizedPnLPercent,
+            size: size.toNumber(),
+            avgEntryPrice: avgEntryPrice.toNumber(),
+            currentPrice: currentPrice.toNumber(),
+            currentValue: currentValue.toNumber(),
+            costBasis: costBasis.toNumber(),
+            unrealizedPnL: unrealizedPnL.toNumber(),
+            unrealizedPnLPercent: unrealizedPnLPercent.toNumber(),
             redemptionStatus: pos.redeemable ? 'RESOLVED' : 'ACTIVE',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-        };
-    });
+        });
+    }
 
     // Filter out resolved/redeemed positions from active view
     return positions.filter(p => p.redemptionStatus === 'ACTIVE');
@@ -210,34 +205,46 @@ export async function fetchPositions(walletAddress: string): Promise<Position[]>
 export async function fetchTrades(walletAddress: string, limit = 50): Promise<Trade[]> {
     const proxyAddress = await resolveProxy(walletAddress);
 
-    // The API returns title, slug directly in the response
-    const rawTrades = await fetchWithRetry<PolymarketTradeWithMarketInfo[]>(
+    const rawTrades = await fetchWithRetry<unknown[]>(
         `${DATA_API_BASE}/trades?user=${proxyAddress}&limit=${limit}`
     );
 
-    const trades: Trade[] = rawTrades.map((trade) => {
-        // Timestamp is Unix epoch in seconds - convert to ISO string
+    const trades: Trade[] = [];
+
+    for (const rawTrade of rawTrades) {
+        const result = PolymarketTradeAPISchema.safeParse(rawTrade);
+        if (!result.success) {
+            console.warn(`Skipping invalid trade for ${walletAddress}:`, result.error);
+            continue;
+        }
+        const trade = result.data;
+
+        // Timestamp conversion
         const timestampMs = typeof trade.timestamp === 'number'
             ? trade.timestamp * 1000
             : parseInt(trade.timestamp) * 1000;
 
-        return {
-            id: trade.id,
+        // Use Decimal.js for math
+        const size = new Decimal(trade.size || 0);
+        const price = new Decimal(trade.price || 0);
+        const usdcAmount = size.times(price);
+
+        trades.push({
+            id: trade.id || `trade-${timestampMs}-${trade.transactionHash}`,
             walletAddress,
             conditionId: trade.conditionId,
-            // Use title/slug from API response directly
             marketSlug: trade.slug || trade.conditionId.slice(0, 16),
             marketTitle: trade.title || 'Unknown Market',
             side: trade.side.toUpperCase() as 'BUY' | 'SELL',
             outcome: trade.outcome.toUpperCase(),
-            size: parseFloat(String(trade.size)) || 0,
-            price: parseFloat(String(trade.price)) || 0,
-            usdcAmount: (parseFloat(String(trade.size)) || 0) * (parseFloat(String(trade.price)) || 0),
+            size: size.toNumber(),
+            price: price.toNumber(),
+            usdcAmount: usdcAmount.toNumber(),
             timestamp: new Date(timestampMs).toISOString(),
             txHash: trade.transactionHash,
             blockNumber: trade.blockNumber,
-        };
-    });
+        });
+    }
 
     return trades;
 }

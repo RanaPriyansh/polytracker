@@ -1,101 +1,67 @@
 /**
- * Toast Notification Component
- * Shows in-app notifications for new trades
+ * Toast Notifications Manager
+ * Handles toast display and sound effects
  */
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-    ToastNotification,
-    subscribeToToasts,
-    requestNotificationPermission,
-    getNotificationPermission
-} from '@/lib/notifications';
+import { useState, useEffect } from 'react';
+import { subscribeToToasts, Toast, removeToast, getNotificationPermission, setNotificationPermission as setPerm } from '@/lib/notifications';
 
 export function ToastContainer() {
-    const [toasts, setToasts] = useState<ToastNotification[]>([]);
-    const [notificationPermission, setNotificationPermission] = useState<string>('default');
+    const [toasts, setToasts] = useState<Toast[]>([]);
+    // Lazy initialization for permission
+    const [permission, setPermission] = useState<NotificationPermission>(() => {
+        if (typeof window !== 'undefined') {
+            return getNotificationPermission();
+        }
+        return 'default';
+    });
 
     useEffect(() => {
-        // Get initial notification permission
-        setNotificationPermission(getNotificationPermission());
-
         // Subscribe to new toasts
         const unsubscribe = subscribeToToasts((toast) => {
-            setToasts(prev => [...prev, toast]);
+            setToasts((prev) => [toast, ...prev].slice(0, 5)); // Keep max 5
 
-            // Auto-remove after 8 seconds
+            // Auto dismiss after 5 seconds
             setTimeout(() => {
-                setToasts(prev => prev.filter(t => t.id !== toast.id));
-            }, 8000);
+                removeToast(toast.id);
+                setToasts((prev) => prev.filter((t) => t.id !== toast.id));
+            }, 5000);
         });
 
-        return unsubscribe;
+        return () => unsubscribe();
     }, []);
 
-    const removeToast = useCallback((id: string) => {
-        setToasts(prev => prev.filter(t => t.id !== id));
-    }, []);
-
-    const handleEnableNotifications = async () => {
-        const granted = await requestNotificationPermission();
-        setNotificationPermission(granted ? 'granted' : 'denied');
+    const requestPermission = async () => {
+        const result = await setPerm();
+        setPermission(result);
     };
 
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-    };
+    if (toasts.length === 0 && permission === 'granted') {
+        return null;
+    }
 
     return (
         <div className="toast-container">
-            {/* Notification permission banner */}
-            {notificationPermission === 'default' && (
-                <div className="notification-banner">
-                    <span>🔔 Enable notifications to get alerts when tracked wallets make trades</span>
-                    <button onClick={handleEnableNotifications} className="btn-enable">
-                        Enable
-                    </button>
+            {permission === 'default' && (
+                <div className="permission-banner">
+                    <span>Enable desktop notifications for trade alerts?</span>
+                    <button onClick={requestPermission}>Enable</button>
+                    <button onClick={() => setPermission('denied')}>Dismiss</button>
                 </div>
             )}
 
-            {/* Toast notifications */}
             {toasts.map((toast) => (
-                <div
-                    key={toast.id}
-                    className={`toast toast-${toast.type}`}
-                    onClick={() => {
-                        if (toast.trade?.txHash) {
-                            window.open(`https://polygonscan.com/tx/${toast.trade.txHash}`, '_blank');
-                        }
-                        removeToast(toast.id);
-                    }}
-                >
-                    <div className="toast-header">
-                        <span className="toast-title">{toast.title}</span>
-                        <span className="toast-time">{formatTime(toast.timestamp)}</span>
+                <div key={toast.id} className={`toast toast-${toast.type} animate-slide-in`}>
+                    <div className="toast-content">
+                        <h4>{toast.title}</h4>
+                        <p>{toast.message}</p>
+                        <span className="toast-time">Just now</span>
                     </div>
-                    <p className="toast-message">{toast.message}</p>
-                    {toast.trade && (
-                        <div className="toast-details">
-                            <span className="trade-size">
-                                {toast.trade.size.toLocaleString()} shares
-                            </span>
-                            <span className="trade-value">
-                                ${toast.trade.usdcAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            </span>
-                        </div>
-                    )}
                     <button
                         className="toast-close"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            removeToast(toast.id);
-                        }}
+                        onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
                     >
                         ×
                     </button>
