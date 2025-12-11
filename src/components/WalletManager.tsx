@@ -83,6 +83,26 @@ export function WalletManager({
             )}
 
             <div className="wallet-actions">
+                {/* Ghost mode indicator */}
+                {wallet.ghostMode && (
+                    <span className="ghost-badge" title="Ghost mode active">👻</span>
+                )}
+
+                {/* Ghost toggle */}
+                <button
+                    className={`btn-ghost-toggle ${wallet.ghostMode ? 'active' : ''}`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateWallet(wallet.id, {
+                            ghostMode: !wallet.ghostMode,
+                            ghostStartedAt: !wallet.ghostMode ? new Date().toISOString() : wallet.ghostStartedAt,
+                        });
+                    }}
+                    title={wallet.ghostMode ? 'Disable Ghost Mode' : 'Enable Ghost Mode'}
+                >
+                    👻
+                </button>
+
                 {/* Tier toggle */}
                 <button
                     className="btn-tier-toggle"
